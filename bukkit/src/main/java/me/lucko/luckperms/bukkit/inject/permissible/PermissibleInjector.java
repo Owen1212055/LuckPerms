@@ -28,6 +28,7 @@ package me.lucko.luckperms.bukkit.inject.permissible;
 import me.lucko.luckperms.bukkit.util.CraftBukkitImplementation;
 import me.lucko.luckperms.common.plugin.logging.PluginLogger;
 import org.bukkit.entity.Player;
+import org.bukkit.permissions.Permissible;
 import org.bukkit.permissions.PermissibleBase;
 import org.bukkit.permissions.PermissionAttachment;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -52,11 +53,6 @@ public final class PermissibleInjector {
      */
     private static final Field HUMAN_ENTITY_PERMISSIBLE_FIELD;
 
-    /**
-     * The field where attachments are stored on a permissible base.
-     */
-    private static final Field PERMISSIBLE_BASE_ATTACHMENTS_FIELD;
-
     static {
         try {
             // Try to load the permissible field.
@@ -72,57 +68,12 @@ public final class PermissibleInjector {
             }
             HUMAN_ENTITY_PERMISSIBLE_FIELD = humanEntityPermissibleField;
 
-            // Try to load the attachments field.
-            PERMISSIBLE_BASE_ATTACHMENTS_FIELD = PermissibleBase.class.getDeclaredField("attachments");
-            PERMISSIBLE_BASE_ATTACHMENTS_FIELD.setAccessible(true);
         } catch (ClassNotFoundException | NoSuchFieldException e) {
             throw new ExceptionInInitializerError(e);
         }
     }
 
-    /**
-     * Injects a {@link LuckPermsPermissible} into a {@link Player}.
-     *
-     * @param player the player to inject into
-     * @param newPermissible the permissible to inject
-     * @param logger the plugin logger
-     * @throws Exception propagates any exceptions which were thrown during injection
-     */
-    public static void inject(Player player, LuckPermsPermissible newPermissible, PluginLogger logger) throws Exception {
 
-        // get the existing PermissibleBase held by the player
-        PermissibleBase oldPermissible = (PermissibleBase) HUMAN_ENTITY_PERMISSIBLE_FIELD.get(player);
-
-        // seems we have already injected into this player.
-        if (oldPermissible instanceof LuckPermsPermissible) {
-            throw new IllegalStateException("LPPermissible already injected into player " + player.toString());
-        }
-
-        Class<? extends PermissibleBase> oldClass = oldPermissible.getClass();
-        if (!PermissibleBase.class.equals(oldClass)) {
-            logger.warn("Player " + player.getName() + " already has a custom permissible (" + oldClass.getName() + ")!\n" +
-                    "This is probably because you have multiple permission plugins installed.\n" +
-                    "Please make sure that LuckPerms is the only permission plugin installed on your server!\n" +
-                    "(unless you're performing a migration, in which case, just remember to remove your old " +
-                    "permission plugin once you're done!)");
-        }
-
-        // Move attachments over from the old permissible
-
-        //noinspection unchecked
-        List<PermissionAttachment> attachments = (List<PermissionAttachment>) PERMISSIBLE_BASE_ATTACHMENTS_FIELD.get(oldPermissible);
-
-        newPermissible.convertAndAddAttachments(attachments);
-        attachments.clear();
-        oldPermissible.clearPermissions();
-
-        // Setup the new permissible
-        newPermissible.getActive().set(true);
-        newPermissible.setOldPermissible(oldPermissible);
-
-        // inject the new instance
-        HUMAN_ENTITY_PERMISSIBLE_FIELD.set(player, newPermissible);
-    }
 
     /**
      * Uninjects a {@link LuckPermsPermissible} from a {@link Player}.
@@ -149,7 +100,7 @@ public final class PermissibleInjector {
             // handle the replacement permissible.
             if (dummy) {
                 // just inject a dummy class. this is used when we know the player is about to quit the server.
-                HUMAN_ENTITY_PERMISSIBLE_FIELD.set(player, DummyPermissibleBase.INSTANCE);
+                // HUMAN_ENTITY_PERMISSIBLE_FIELD.set(player, DummyPermissibleBase.INSTANCE);
 
             } else {
                 PermissibleBase newPb = lpPermissible.getOldPermissible();

@@ -53,8 +53,6 @@ import java.util.function.Function;
  * relationships.
  *
  * It also allows us to pre-determine child permission relationships.
- *
- * Injected by {@link InjectorPermissionMap}.
  */
 public final class LuckPermsPermissionMap extends ForwardingMap<String, Permission> {
 

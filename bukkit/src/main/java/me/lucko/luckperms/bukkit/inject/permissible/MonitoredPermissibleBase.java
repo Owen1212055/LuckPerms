@@ -59,7 +59,6 @@ public class MonitoredPermissibleBase extends PermissibleBase {
 
     public MonitoredPermissibleBase(LuckPermsPlugin plugin, PermissibleBase delegate, String name) {
         super(null);
-        DummyPermissibleBase.copyFields(delegate, this);
 
         this.plugin = plugin;
         this.delegate = delegate;

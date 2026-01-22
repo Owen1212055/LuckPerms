@@ -25,6 +25,8 @@
 
 package me.lucko.luckperms.bukkit.listeners;
 
+import io.papermc.paper.connection.PlayerConfigurationConnection;
+import io.papermc.paper.event.connection.PlayerConnectionValidateLoginEvent;
 import me.lucko.luckperms.bukkit.LPBukkitPlugin;
 import me.lucko.luckperms.bukkit.inject.permissible.LuckPermsPermissible;
 import me.lucko.luckperms.bukkit.inject.permissible.PermissibleInjector;
@@ -57,10 +59,10 @@ public class BukkitConnectionListener extends AbstractConnectionListener impleme
 
     private final LPBukkitPlugin plugin;
 
-    private final boolean detectedCraftBukkitOfflineMode;
+    public final boolean detectedCraftBukkitOfflineMode;
 
     private final Set<UUID> deniedAsyncLogin = Collections.synchronizedSet(new HashSet<>());
-    private final Set<UUID> deniedLogin = Collections.synchronizedSet(new HashSet<>());
+    public final Set<UUID> deniedLogin = Collections.synchronizedSet(new HashSet<>());
 
     public BukkitConnectionListener(LPBukkitPlugin plugin) {
         super(plugin);
@@ -78,7 +80,7 @@ public class BukkitConnectionListener extends AbstractConnectionListener impleme
         }
     }
 
-    private void printCraftBukkitOfflineModeError() {
+    public void printCraftBukkitOfflineModeError() {
         this.plugin.getLogger().warn("It appears that your server is running CraftBukkit and configured in offline (cracked) mode.");
         this.plugin.getLogger().warn("Due to a CraftBukkit limitation, LuckPerms cannot function correctly in this setup.");
         this.plugin.getLogger().warn("To resolve this, please either a) upgrade from CraftBukkit to Spigot or Paper, or b) enable online-mode.");
@@ -152,84 +154,22 @@ public class BukkitConnectionListener extends AbstractConnectionListener impleme
         }
     }
 
-    @EventHandler(priority = EventPriority.LOWEST)
-    public void onPlayerLogin(PlayerLoginEvent e) {
-        /* Called when the player starts logging into the server.
-           At this point, the users data should be present and loaded. */
-
-        final Player player = e.getPlayer();
-
-        if (this.plugin.getConfiguration().get(ConfigKeys.DEBUG_LOGINS)) {
-            this.plugin.getLogger().info("Processing login for " + player.getUniqueId() + " - " + player.getName());
-        }
-
-        final User user = this.plugin.getUserManager().getIfLoaded(player.getUniqueId());
-
-        /* User instance is null for whatever reason. Could be that it was unloaded between asyncpre and now. */
-        if (user == null) {
-            this.deniedLogin.add(player.getUniqueId());
-
-            if (!getUniqueConnections().contains(player.getUniqueId())) {
-
-                this.plugin.getLogger().warn("User " + player.getUniqueId() + " - " + player.getName() +
-                        " doesn't have data pre-loaded, they have never been processed during pre-login in this session." +
-                        " - denying login.");
-
-                if (this.detectedCraftBukkitOfflineMode) {
-                    printCraftBukkitOfflineModeError();
-
-                    Component reason = TranslationManager.render(Message.LOADING_STATE_ERROR_CB_OFFLINE_MODE.build(), PlayerLocaleUtil.getLocale(player));
-                    e.disallow(PlayerLoginEvent.Result.KICK_OTHER, LegacyComponentSerializer.legacySection().serialize(reason));
-                    return;
-                }
-
-            } else {
-                this.plugin.getLogger().warn("User " + player.getUniqueId() + " - " + player.getName() +
-                        " doesn't currently have data pre-loaded, but they have been processed before in this session." +
-                        " - denying login.");
-            }
-
-            Component reason = TranslationManager.render(Message.LOADING_STATE_ERROR.build(), PlayerLocaleUtil.getLocale(player));
-            e.disallow(PlayerLoginEvent.Result.KICK_OTHER, LegacyComponentSerializer.legacySection().serialize(reason));
-            return;
-        }
-
-        // User instance is there, now we can inject our custom Permissible into the player.
-        // Care should be taken at this stage to ensure that async tasks which manipulate bukkit data check that the player is still online.
-        try {
-            // Make a new permissible for the user
-            LuckPermsPermissible lpPermissible = new LuckPermsPermissible(player, user, this.plugin);
-
-            // Inject into the player
-            PermissibleInjector.inject(player, lpPermissible, this.plugin.getLogger());
-
-        } catch (Throwable t) {
-            this.plugin.getLogger().warn("Exception thrown when setting up permissions for " +
-                    player.getUniqueId() + " - " + player.getName() + " - denying login.", t);
-
-            Component reason = TranslationManager.render(Message.LOADING_SETUP_ERROR.build(), PlayerLocaleUtil.getLocale(player));
-            e.disallow(PlayerLoginEvent.Result.KICK_OTHER, LegacyComponentSerializer.legacySection().serialize(reason));
-            return;
-        }
-
-        this.plugin.getContextManager().signalContextUpdate(player);
-    }
-
     @EventHandler(priority = EventPriority.MONITOR)
-    public void onPlayerLoginMonitor(PlayerLoginEvent e) {
+    public void onPlayerLoginMonitor(PlayerConnectionValidateLoginEvent e) {
         /* Listen to see if the event was cancelled after we initially handled the login
            If the connection was cancelled here, we need to do something to clean up the data that was loaded. */
 
-        // Check to see if this connection was denied at LOW. Even if it was denied at LOW, their data will still be present.
-        if (this.deniedLogin.remove(e.getPlayer().getUniqueId())) {
-            // This is a problem, as they were denied at low priority, but are now being allowed.
-            if (e.getResult() == PlayerLoginEvent.Result.ALLOWED) {
-                this.plugin.getLogger().severe("Player connection was re-allowed for " + e.getPlayer().getUniqueId());
-                e.disallow(PlayerLoginEvent.Result.KICK_OTHER, "");
+        if (e.getConnection() instanceof PlayerConfigurationConnection connection) {
+            UUID uuid = connection.getProfile().getId();
+            // Check to see if this connection was denied at LOW. Even if it was denied at LOW, their data will still be present.
+            if (this.deniedLogin.remove(uuid)) {
+                // This is a problem, as they were denied at low priority, but are now being allowed.
+                if (e.isAllowed()) {
+                    this.plugin.getLogger().severe("Player connection was re-allowed for " + uuid);
+                    e.kickMessage(Component.text(""));
+                }
             }
         }
-
-        PermissibleInjector.checkInjected(e.getPlayer(), this.plugin.getLogger());
     }
 
     // Wait until the last priority to unload, so plugins can still perform permission checks on this event

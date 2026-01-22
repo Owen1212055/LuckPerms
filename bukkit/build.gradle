@@ -2,15 +2,27 @@ plugins {
     alias(libs.plugins.shadow)
 }
 
+sourceCompatibility = 21
+targetCompatibility = 21
+
 repositories {
-    maven { url 'https://repo.papermc.io/repository/maven-public/' }
+    //maven { url 'https://repo.papermc.io/repository/maven-public/' }
+    maven {
+        url = uri("https://maven-prs.papermc.io/Paper/pr13201")
+        name = "Maven for PR #13201" // https://github.com/PaperMC/Paper/pull/13201
+
+        mavenContent {
+            includeModule("io.papermc.paper", "dev-bundle")
+            includeModule("io.papermc.paper", "paper-api")
+        }
+    }
 }
 
 dependencies {
     implementation project(':common')
     compileOnly project(':common:loader-utils')
 
-    compileOnly 'com.destroystokyo.paper:paper-api:1.15.2-R0.1-SNAPSHOT'
+    compileOnly 'io.papermc.paper:paper-api:1.21.10-R0.1-SNAPSHOT'
     compileOnly('net.kyori:adventure-platform-bukkit:4.4.0') {
         exclude(module: 'adventure-bom')
         exclude(module: 'adventure-api')

@@ -51,8 +51,6 @@ import java.util.concurrent.ConcurrentHashMap;
  * This instance allows LuckPerms to intercept calls to
  * {@link PluginManager#addPermission(Permission)}, specifically regarding
  * the default nature of the permission.
- *
- * Injected by {@link InjectorDefaultsMap}.
  */
 public final class LuckPermsDefaultsMap implements Map<Boolean, Set<Permission>> {
     // keyset for all instances

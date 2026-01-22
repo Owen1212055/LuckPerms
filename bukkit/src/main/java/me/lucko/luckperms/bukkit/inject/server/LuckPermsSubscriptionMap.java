@@ -58,8 +58,6 @@ import java.util.WeakHashMap;
  * 2) inject it's own map instance to proxy calls to {@link PluginManager#getPermissionSubscriptions(String)} back to LuckPerms.
  *
  * This class implements option 2 above. It is preferred because it is faster & uses less memory
- *
- * Injected by {@link InjectorSubscriptionMap}.
  */
 public final class LuckPermsSubscriptionMap implements Map<String, Map<Permissible, Boolean>> {
 

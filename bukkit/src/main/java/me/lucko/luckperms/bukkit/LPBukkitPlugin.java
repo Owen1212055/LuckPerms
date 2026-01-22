@@ -29,12 +29,9 @@ import me.lucko.luckperms.bukkit.brigadier.LuckPermsBrigadier;
 import me.lucko.luckperms.bukkit.calculator.BukkitCalculatorFactory;
 import me.lucko.luckperms.bukkit.context.BukkitContextManager;
 import me.lucko.luckperms.bukkit.context.BukkitPlayerCalculator;
+import me.lucko.luckperms.bukkit.inject.manager.LuckPermsPermissionManager;
 import me.lucko.luckperms.bukkit.inject.permissible.LuckPermsPermissible;
 import me.lucko.luckperms.bukkit.inject.permissible.PermissibleInjector;
-import me.lucko.luckperms.bukkit.inject.permissible.PermissibleMonitoringInjector;
-import me.lucko.luckperms.bukkit.inject.server.InjectorDefaultsMap;
-import me.lucko.luckperms.bukkit.inject.server.InjectorPermissionMap;
-import me.lucko.luckperms.bukkit.inject.server.InjectorSubscriptionMap;
 import me.lucko.luckperms.bukkit.inject.server.LuckPermsDefaultsMap;
 import me.lucko.luckperms.bukkit.inject.server.LuckPermsPermissionMap;
 import me.lucko.luckperms.bukkit.inject.server.LuckPermsSubscriptionMap;
@@ -193,21 +190,7 @@ public class LPBukkitPlugin extends AbstractLuckPermsPlugin {
 
     @Override
     protected void setupPlatformHooks() {
-        // inject our own custom permission maps
-        Runnable[] injectors = new Runnable[]{
-                new InjectorSubscriptionMap(this)::inject,
-                new InjectorPermissionMap(this)::inject,
-                new InjectorDefaultsMap(this)::inject,
-                new PermissibleMonitoringInjector(this, PermissibleMonitoringInjector.Mode.INJECT)
-        };
-
-        for (Runnable injector : injectors) {
-            injector.run();
-
-            // schedule another injection after all plugins have loaded
-            // the entire pluginmanager instance is replaced by some plugins :(
-            this.bootstrap.getServer().getScheduler().runTaskLaterAsynchronously(this.bootstrap.getLoader(), injector, 1);
-        }
+        LuckPermsPermissionManager.injectLuckpermsBootstrap(this);
 
         /*
          * This is an unfortunate solution to a problem which shouldn't even exist. As of Spigot 1.15,
@@ -284,29 +267,6 @@ public class LPBukkitPlugin extends AbstractLuckPermsPlugin {
         if (getConfiguration().get(ConfigKeys.UPDATE_CLIENT_COMMAND_LIST) && BukkitCommandListUpdater.isSupported()) {
             getApiProvider().getEventBus().subscribe(new BukkitCommandListUpdater(this));
         }
-
-        // Load any online users (in the case of a reload)
-        for (Player player : this.bootstrap.getServer().getOnlinePlayers()) {
-            this.bootstrap.getScheduler().executeAsync(() -> {
-                try {
-                    User user = this.connectionListener.loadUser(player.getUniqueId(), player.getName());
-                    if (user != null) {
-                        this.bootstrap.getScheduler().executeSync(() -> {
-                            try {
-                                LuckPermsPermissible lpPermissible = new LuckPermsPermissible(player, user, this);
-                                PermissibleInjector.inject(player, lpPermissible, getLogger());
-                            } catch (Throwable t) {
-                                getLogger().severe("Exception thrown when setting up permissions for " +
-                                        player.getUniqueId() + " - " + player.getName(), t);
-                            }
-                        });
-                    }
-                } catch (Exception e) {
-                    getLogger().severe("Exception occurred whilst loading data for " +
-                            player.getUniqueId() + " - " + player.getName(), e);
-                }
-            });
-        }
     }
 
     @Override
@@ -331,11 +291,7 @@ public class LPBukkitPlugin extends AbstractLuckPermsPlugin {
             }
         }
 
-        // uninject custom maps
-        new InjectorSubscriptionMap(this).uninject();
-        new InjectorPermissionMap(this).uninject();
-        new InjectorDefaultsMap(this).uninject();
-        new PermissibleMonitoringInjector(this, PermissibleMonitoringInjector.Mode.UNINJECT).run();
+        LuckPermsPermissionManager.uninject();
 
         // unhook vault
         if (this.vaultHookManager != null) {
@@ -384,7 +340,7 @@ public class LPBukkitPlugin extends AbstractLuckPermsPlugin {
     }
 
     @Override
-    public AbstractConnectionListener getConnectionListener() {
+    public BukkitConnectionListener getConnectionListener() {
         return this.connectionListener;
     }
 
